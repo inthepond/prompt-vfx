@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="prompt-vfx" width="100%" />
+<img src="assets/banner.svg?v=2" alt="prompt-vfx" width="100%" />
 
 <br/>
 
