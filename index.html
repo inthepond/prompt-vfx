@@ -61,9 +61,11 @@
     border-right: 1px solid var(--hair);
     color: var(--fg);
     white-space: nowrap;
+    text-decoration: none;
   }
   header.bar .brand b { color: var(--accent); font-weight: 500; margin-right: 6px; }
-  header.bar .brand span { color: var(--dim); }
+  header.bar .brand span { color: var(--dim); transition: color 160ms ease; }
+  header.bar a.brand:hover span { color: var(--fg); }
   header.bar nav.tabs {
     display: flex; align-items: stretch; flex: 1; min-width: 0;
     overflow-x: auto; scrollbar-width: none;
@@ -687,7 +689,7 @@
 <body>
 
 <header class="bar">
-  <div class="brand"><b>▶</b><span>STUDIO / 2026</span></div>
+  <a class="brand" href="https://www.inthepond.com.au/" target="_blank" rel="noopener noreferrer"><b>▶</b><span>INTHEPOND</span></a>
   <nav class="tabs" id="tabs"></nav>
   <div class="r">
     <span id="indexLabel">—</span>
