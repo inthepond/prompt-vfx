@@ -43,17 +43,17 @@
   <!-- tab chips: pill width fixed, label width pinned smaller than the pill -->
   <g font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="15" font-weight="600">
     <g transform="translate(83,250)">
-      <rect width="146" height="34" rx="17" fill="#141416" stroke="#ffffff" stroke-opacity="0.08"/>
+      <rect width="146" height="34" rx="17" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
       <circle cx="22" cy="17" r="5" fill="#4be07a"/>
       <text x="40" y="22" textLength="92" lengthAdjust="spacingAndGlyphs" fill="#cfcfd4">VFX · 100</text>
     </g>
     <g transform="translate(241,250)">
-      <rect width="146" height="34" rx="17" fill="#141416" stroke="#ffffff" stroke-opacity="0.08"/>
+      <rect width="146" height="34" rx="17" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
       <circle cx="22" cy="17" r="5" fill="#00d4ff"/>
       <text x="40" y="22" textLength="92" lengthAdjust="spacingAndGlyphs" fill="#cfcfd4">GSAP · 40</text>
     </g>
     <g transform="translate(399,250)">
-      <rect width="128" height="34" rx="17" fill="#141416" stroke="#ffffff" stroke-opacity="0.08"/>
+      <rect width="128" height="34" rx="17" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
       <circle cx="22" cy="17" r="5" fill="#ff5b1f"/>
       <text x="40" y="22" textLength="74" lengthAdjust="spacingAndGlyphs" fill="#cfcfd4">3D · 22</text>
     </g>
