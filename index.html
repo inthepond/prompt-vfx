@@ -1,0 +1,1838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VFX Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- GSAP 3.13 — core + plugins (all free & public since the Webflow acquisition) -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/TextPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/MotionPathPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/Flip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/CustomEase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/CustomBounce.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/CustomWiggle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/EasePack.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/DrawSVGPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/MorphSVGPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/Physics2DPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrambleTextPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
+<script src="effects-extras.js"></script>
+<script src="gsap-modules.js"></script>
+<!-- 3D / shader tier: Three.js UMD global + module file (load before the rAF patch) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+<script src="three-modules.js"></script>
+<style>
+  :root {
+    --bg: #000;
+    --fg: #e8e8e8;
+    --dim: #5a5a5a;
+    --accent: #ff5b1f;
+    --hair: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  header.bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 36px;
+    display: flex; align-items: stretch; justify-content: space-between;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hair);
+    z-index: 100;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  header.bar .brand {
+    display: flex; align-items: center; gap: 0;
+    padding: 0 14px;
+    border-right: 1px solid var(--hair);
+    color: var(--fg);
+    white-space: nowrap;
+  }
+  header.bar .brand b { color: var(--accent); font-weight: 500; margin-right: 6px; }
+  header.bar .brand span { color: var(--dim); }
+  header.bar nav.tabs {
+    display: flex; align-items: stretch; flex: 1; min-width: 0;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  header.bar nav.tabs::-webkit-scrollbar { display: none; }
+  header.bar nav.tabs button {
+    appearance: none; border: 0; background: transparent;
+    color: var(--dim);
+    font: inherit; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0 16px;
+    display: inline-flex; align-items: center; gap: 8px;
+    cursor: pointer; white-space: nowrap;
+    border-right: 1px solid var(--hair);
+    position: relative;
+    transition: color 140ms ease;
+  }
+  header.bar nav.tabs button:hover { color: var(--fg); }
+  header.bar nav.tabs button.active { color: var(--fg); }
+  header.bar nav.tabs button.active::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--accent);
+  }
+  header.bar nav.tabs button .count {
+    color: var(--dim); font-size: 10px; opacity: 0.7;
+  }
+  header.bar nav.tabs button.active .count { color: var(--accent); opacity: 1; }
+  header.bar .r {
+    display: flex; align-items: center; gap: 14px;
+    padding: 0 14px;
+    color: var(--dim);
+    border-left: 1px solid var(--hair);
+    white-space: nowrap;
+  }
+  header.bar .r span::before { content: "[ "; }
+  header.bar .r span::after { content: " ]"; }
+  @media (max-width: 720px) {
+    header.bar .brand span { display: none; }
+    header.bar .r { display: none; }
+  }
+
+  main.grid {
+    margin-top: 36px;
+    display: grid;
+    /* fully responsive: at least 280px per cell, fills viewport, no gap */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+    gap: 0;
+  }
+
+  .cell {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    overflow: hidden;
+    cursor: pointer;
+    border-right: 1px solid var(--hair);
+    border-bottom: 1px solid var(--hair);
+    isolation: isolate;
+    /* viewport culling: skip paint/layout for offscreen cells */
+    content-visibility: auto;
+    contain-intrinsic-size: 360px 360px;
+  }
+  /* Halt CSS animations on paused (offscreen) cells so timelines don't tick */
+  .cell.paused .stage,
+  .cell.paused .stage *,
+  .cell.paused .stage *::before,
+  .cell.paused .stage *::after {
+    animation-play-state: paused !important;
+  }
+  .cell .stage {
+    position: absolute !important; inset: 0 !important;
+    transition: filter 220ms ease, opacity 220ms ease, transform 220ms ease;
+  }
+  .cell.flipped .stage {
+    filter: blur(8px) brightness(0.3);
+    opacity: 0.35;
+  }
+
+  .cell .meta {
+    position: absolute;
+    left: 10px; bottom: 10px; right: 10px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .cell .meta .num {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .cell .meta .name {
+    color: var(--fg);
+    opacity: 0.0;
+    transition: opacity 180ms ease;
+  }
+  .cell:hover .meta .name { opacity: 0.95; }
+
+  .cell .corner {
+    position: absolute; top: 8px; right: 10px;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--dim);
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+  .cell:hover .corner { opacity: 0.7; }
+
+  /* Crosshair when hovered */
+  .cell::before, .cell::after {
+    content: "";
+    position: absolute;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 160ms ease;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .cell::before { top: 8px; left: 8px; width: 10px; height: 1px; }
+  .cell::after  { top: 8px; left: 8px; width: 1px; height: 10px; }
+  .cell:hover::before, .cell:hover::after { opacity: 0.9; }
+
+  /* Reveal button (small P · prompt) — top-right, out of the way of meta and content */
+  .reveal {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 20px; height: 20px;
+    display: grid; place-items: center;
+    font: 500 10px/1 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    color: #fff;
+    background: rgba(0,0,0,0.65);
+    border: 1px solid rgba(255,255,255,0.22);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    cursor: pointer;
+    border-radius: 0;
+    z-index: 6;
+    opacity: 0;
+    transition: opacity 160ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease;
+    user-select: none;
+  }
+  /* hide the hover "category" label since it would sit under P */
+  .cell .corner { display: none; }
+  .cell:hover .reveal,
+  .cell.flipped .reveal { opacity: 1; }
+  .reveal:hover {
+    color: #000; background: var(--accent);
+    border-color: var(--accent);
+  }
+  .cell.flipped .reveal {
+    color: #000; background: var(--accent); border-color: var(--accent);
+  }
+
+  /* Prompt overlay */
+  .prompt {
+    position: absolute; inset: 0;
+    padding: 18px 18px 44px 18px;
+    background: rgba(0,0,0,0.55);
+    color: var(--fg);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow: auto;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    pointer-events: none;
+    z-index: 5;
+    backdrop-filter: blur(2px);
+  }
+  .cell.flipped .prompt {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .prompt .label {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .prompt .label::after {
+    content: ""; flex: 1; height: 1px; background: var(--hair);
+  }
+  .prompt .copy {
+    position: absolute;
+    bottom: 12px; right: 14px;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--hair);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .prompt .copy:hover { color: var(--fg); border-color: var(--fg); }
+  .prompt .hint {
+    position: absolute;
+    bottom: 16px; left: 18px;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* Particular cell styles ============================================ */
+
+  /* 01 Streaming text particles */
+  .fx-stream {
+    position: absolute; inset: 0;
+    background: #050505;
+    font-family: inherit;
+    color: #d8d8d8;
+    padding: 18px;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+  .fx-stream .line { white-space: pre-wrap; }
+  .fx-stream .cursor {
+    display: inline-block;
+    width: 7px; height: 14px;
+    background: var(--accent);
+    vertical-align: -2px;
+    animation: blink 0.7s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .fx-stream .spark {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  /* 02 Magnetic dot field */
+  .fx-magnet { position: absolute; inset: 0; }
+  .fx-magnet canvas { display: block; width: 100%; height: 100%; }
+
+  /* 03 ASCII rain */
+  .fx-ascii {
+    position: absolute; inset: 0;
+    background: #000;
+    overflow: hidden;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.0;
+    color: #4be07a;
+  }
+  .fx-ascii .col {
+    position: absolute;
+    top: -100%;
+    width: 14px;
+    text-align: center;
+    white-space: pre;
+    will-change: transform;
+  }
+
+  /* 04 Cursor trail */
+  .fx-trail { position: absolute; inset: 0; background: #0a0a0a; }
+  .fx-trail .label-c {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px; color: var(--dim);
+    letter-spacing: 0.2em; text-transform: uppercase;
+    pointer-events: none;
+  }
+  .fx-trail .dot {
+    position: absolute; width: 6px; height: 6px;
+    border-radius: 50%; background: #fff;
+    pointer-events: none;
+    transition: opacity 600ms linear, transform 600ms linear;
+  }
+
+  /* 05 Glitch text */
+  .fx-glitch {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: #000;
+  }
+  .fx-glitch .word {
+    position: relative;
+    font-size: clamp(28px, 7vw, 56px);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+  .fx-glitch .word::before,
+  .fx-glitch .word::after {
+    content: attr(data-text);
+    position: absolute; left: 0; top: 0; right: 0;
+    overflow: hidden;
+  }
+  .fx-glitch .word::before {
+    color: #ff2d55;
+    transform: translate(2px, 0);
+    clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+    animation: glitch1 2.4s infinite steps(3);
+  }
+  .fx-glitch .word::after {
+    color: #00d4ff;
+    transform: translate(-2px, 0);
+    clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+    animation: glitch2 2.7s infinite steps(3);
+  }
+  @keyframes glitch1 {
+    0%,90%,100% { transform: translate(2px, 0); }
+    92% { transform: translate(-3px, 1px); }
+    94% { transform: translate(4px, -1px); }
+  }
+  @keyframes glitch2 {
+    0%,87%,100% { transform: translate(-2px, 0); }
+    89% { transform: translate(3px, -1px); }
+    91% { transform: translate(-4px, 1px); }
+  }
+
+  /* 06 Liquid blob (CSS only) */
+  .fx-blob {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 30%, #1a1a1a, #000);
+    filter: contrast(20) blur(0px);
+    overflow: hidden;
+  }
+  .fx-blob .inner {
+    position: absolute; inset: -10%;
+    background: #000;
+    filter: blur(14px) contrast(18);
+  }
+  .fx-blob .b {
+    position: absolute;
+    border-radius: 50%;
+    background: #ff5b1f;
+    mix-blend-mode: screen;
+    filter: blur(18px);
+  }
+  .fx-blob .b1 { width: 50%; height: 50%; left: 10%; top: 20%;
+    animation: blob1 7s ease-in-out infinite alternate; }
+  .fx-blob .b2 { width: 45%; height: 45%; right: 10%; top: 30%; background: #ff8a4c;
+    animation: blob2 9s ease-in-out infinite alternate; }
+  .fx-blob .b3 { width: 35%; height: 35%; left: 35%; bottom: 5%; background: #ffb47a;
+    animation: blob3 8s ease-in-out infinite alternate; }
+  @keyframes blob1 { to { transform: translate(20%, 15%) scale(1.2); } }
+  @keyframes blob2 { to { transform: translate(-25%, 20%) scale(0.9); } }
+  @keyframes blob3 { to { transform: translate(10%, -25%) scale(1.15); } }
+
+  /* 07 Wireframe terrain (canvas) */
+  .fx-terrain { position: absolute; inset: 0; background: #000; }
+  .fx-terrain canvas { display: block; width: 100%; height: 100%; }
+
+  /* 08 CRT scanlines + flicker */
+  .fx-crt {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at center, #1a2a1a 0%, #050805 70%, #000 100%);
+    overflow: hidden;
+  }
+  .fx-crt .text {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: #7af090;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 6px #4be07a;
+  }
+  .fx-crt::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.35) 3px,
+      rgba(0,0,0,0) 4px
+    );
+    pointer-events: none;
+    animation: crtRoll 8s linear infinite;
+  }
+  .fx-crt::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(120,255,150,0.04);
+    animation: crtFlicker 0.18s steps(2) infinite;
+    pointer-events: none;
+  }
+  @keyframes crtRoll {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 200px; }
+  }
+  @keyframes crtFlicker { 50% { opacity: 0.6; } }
+
+  /* 09 Marquee tape */
+  .fx-marquee {
+    position: absolute; inset: 0;
+    background: #000;
+    display: grid;
+    grid-template-rows: repeat(6, 1fr);
+    overflow: hidden;
+  }
+  .fx-marquee .row {
+    display: flex; align-items: center;
+    border-bottom: 1px solid var(--hair);
+    overflow: hidden;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .fx-marquee .row span { padding-right: 22px; }
+  .fx-marquee .row .track {
+    display: inline-flex; gap: 0;
+    animation: marq 18s linear infinite;
+  }
+  .fx-marquee .row.r-rev .track { animation-direction: reverse; animation-duration: 22s; }
+  .fx-marquee .row.r-fast .track { animation-duration: 12s; }
+  .fx-marquee .row .track span:nth-child(odd)  { color: #fff; }
+  .fx-marquee .row .track span:nth-child(even) { color: var(--accent); }
+  @keyframes marq { to { transform: translateX(-50%); } }
+
+  /* 10 Constellation */
+  .fx-stars { position: absolute; inset: 0; background: #000; }
+  .fx-stars canvas { display: block; width: 100%; height: 100%; }
+
+  /* 11 Orbit rings */
+  .fx-orbit {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: radial-gradient(circle at center, #0a0a0a, #000 70%);
+  }
+  .fx-orbit .ring {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 50%;
+  }
+  .fx-orbit .core {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 30px var(--accent);
+    z-index: 2;
+  }
+  .fx-orbit .planet {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 10px #fff;
+    transform-origin: center;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 12 Halftone wave */
+  .fx-halftone { position: absolute; inset: 0; background: #fff; }
+  .fx-halftone canvas { display: block; width: 100%; height: 100%; }
+
+  /* 13 Type morph */
+  .fx-type {
+    position: absolute; inset: 0;
+    background: #f3f0e8;
+    color: #111;
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .fx-type .word {
+    font-size: clamp(40px, 12vw, 92px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-family: 'JetBrains Mono', monospace;
+    transition: font-stretch 1.2s ease, font-weight 1.2s ease, letter-spacing 1.2s ease;
+  }
+  .fx-type::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 14px;
+    height: 1px; background: rgba(0,0,0,0.2);
+  }
+
+  /* 14 Pixel sort */
+  .fx-pixel { position: absolute; inset: 0; background: #000; }
+  .fx-pixel canvas { display: block; width: 100%; height: 100%; }
+
+  /* 15 Cursor laser */
+  .fx-laser {
+    position: absolute; inset: 0;
+    background: #000;
+    overflow: hidden;
+  }
+  .fx-laser .target {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%,-50%);
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .fx-laser .beam-h, .fx-laser .beam-v {
+    position: absolute;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+  .fx-laser .beam-h { left: 0; right: 0; height: 1px; }
+  .fx-laser .beam-v { top: 0; bottom: 0; width: 1px; }
+  .fx-laser:hover .beam-h, .fx-laser:hover .beam-v { opacity: 0.7; }
+
+  /* 16 Confetti burst */
+  .fx-confetti {
+    position: absolute; inset: 0;
+    background: #0e0e0e;
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .fx-confetti button {
+    z-index: 2;
+    background: transparent;
+    border: 1px solid #444;
+    color: #ddd;
+    padding: 10px 16px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .fx-confetti button:hover { border-color: #fff; color: #fff; }
+  .fx-confetti .piece {
+    position: absolute;
+    width: 6px; height: 10px;
+    pointer-events: none;
+  }
+
+  /* 17 Plasma */
+  .fx-plasma { position: absolute; inset: 0; }
+  .fx-plasma canvas { display: block; width: 100%; height: 100%; }
+
+  /* 18 Audio bars */
+  .fx-bars {
+    position: absolute; inset: 0;
+    background: #000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    padding: 0 10px 30% 10px;
+    gap: 3px;
+  }
+  .fx-bars .b {
+    width: 6px;
+    background: linear-gradient(to top, var(--accent), #ffd9b0);
+    animation: barJump 1.2s ease-in-out infinite;
+    transform-origin: bottom;
+  }
+  @keyframes barJump {
+    0%, 100% { transform: scaleY(0.2); }
+    50%      { transform: scaleY(1); }
+  }
+  .fx-bars .label-c {
+    position: absolute; left: 14px; top: 14px;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* 19 Noise / TV static */
+  .fx-noise { position: absolute; inset: 0; }
+  .fx-noise canvas { display: block; width: 100%; height: 100%; }
+
+  /* 20 Shutter reveal */
+  .fx-shutter {
+    position: absolute; inset: 0;
+    background: #ec5b1f;
+    overflow: hidden;
+    display: grid; place-items: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: clamp(22px, 6vw, 38px);
+    letter-spacing: 0.04em;
+  }
+  .fx-shutter .panel {
+    position: absolute; left: 0; right: 0;
+    background: #000;
+    height: calc(100% / 8);
+    animation: shutter 4s ease-in-out infinite;
+  }
+  @keyframes shutter {
+    0%, 40%, 100% { transform: translateX(0); }
+    20% { transform: translateX(110%); }
+  }
+  .fx-shutter .panel:nth-child(1) { top: 0;            animation-delay: 0.00s; }
+  .fx-shutter .panel:nth-child(2) { top: 12.5%;        animation-delay: 0.05s; }
+  .fx-shutter .panel:nth-child(3) { top: 25%;          animation-delay: 0.10s; }
+  .fx-shutter .panel:nth-child(4) { top: 37.5%;        animation-delay: 0.15s; }
+  .fx-shutter .panel:nth-child(5) { top: 50%;          animation-delay: 0.20s; }
+  .fx-shutter .panel:nth-child(6) { top: 62.5%;        animation-delay: 0.25s; }
+  .fx-shutter .panel:nth-child(7) { top: 75%;          animation-delay: 0.30s; }
+  .fx-shutter .panel:nth-child(8) { top: 87.5%;        animation-delay: 0.35s; }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 100ms !important;
+    }
+  }
+
+  /* Footer */
+  footer.foot {
+    border-top: 1px solid var(--hair);
+    padding: 14px 16px 30px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    display: flex; justify-content: space-between; gap: 14px;
+    flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><b>▶</b><span>STUDIO / 2026</span></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="r">
+    <span id="indexLabel">—</span>
+  </div>
+</header>
+
+<main class="grid" id="grid"></main>
+
+<footer class="foot">
+  <div>© Studio — Web Component & VFX Lab</div>
+  <div id="footMeta">—</div>
+</footer>
+
+<script>
+/* ---- Per-cell lifecycle: pause JS work for offscreen cells ----------
+   Mounters were written to fire-and-forget rAF/setTimeout/setInterval and
+   never expose stop hooks. We patch the globals once, attribute every timer
+   call to the cell currently being mounted (or whose listener is firing),
+   and short-circuit work when that cell is paused. Zero edits to mounters.
+*/
+const _raf  = window.requestAnimationFrame.bind(window);
+const _sto  = window.setTimeout.bind(window);
+const _sin  = window.setInterval.bind(window);
+const _cin  = window.clearInterval.bind(window);
+const _addE = EventTarget.prototype.addEventListener;
+
+let activeLC = null;  // ambient cell lifecycle during mount or callback
+function withLC(lc, fn) {
+  const prev = activeLC; activeLC = lc;
+  try { return fn(); } finally { activeLC = prev; }
+}
+
+function makeLifecycle(cell) {
+  return {
+    cell,
+    paused: false,
+    mounted: false,
+    destroyed: false,      // tab switch / grid teardown — drop callbacks forever
+    deferred: [],          // rAF/setTimeout cbs caught while paused
+    intervals: [],         // {fn, delay, id} — recreated on resume
+    pause() {
+      if (this.paused || this.destroyed) return;
+      this.paused = true;
+      cell.classList.add('paused');
+      // Tear down intervals; recreate on resume so no ticks during pause.
+      for (const rec of this.intervals) {
+        if (rec.id != null) { _cin(rec.id); rec.id = null; }
+      }
+    },
+    resume() {
+      if (!this.paused || this.destroyed) return;
+      this.paused = false;
+      cell.classList.remove('paused');
+      for (const rec of this.intervals) {
+        if (rec.id == null) rec.id = _sin(rec.fn, rec.delay);
+      }
+      const queued = this.deferred; this.deferred = [];
+      const t = performance.now();
+      for (const cb of queued) {
+        try { withLC(this, () => cb(t)); }
+        catch (e) { console.error(e); }
+      }
+    },
+    destroy() {
+      if (this.destroyed) return;
+      this.destroyed = true;
+      this.paused = true;
+      for (const rec of this.intervals) {
+        if (rec.id != null) { _cin(rec.id); rec.id = null; }
+      }
+      this.deferred.length = 0;
+      this.intervals.length = 0;
+    },
+  };
+}
+
+window.requestAnimationFrame = function(cb) {
+  const lc = activeLC;
+  if (!lc) return _raf(cb);
+  return _raf(function (t) {
+    if (lc.destroyed) return;
+    if (lc.paused)    { lc.deferred.push(cb); return; }
+    withLC(lc, () => cb(t));
+  });
+};
+
+window.setTimeout = function(cb, delay) {
+  const lc = activeLC;
+  if (!lc || typeof cb !== 'function') return _sto(cb, delay);
+  return _sto(function () {
+    if (lc.destroyed) return;
+    if (lc.paused)    { lc.deferred.push(cb); return; }
+    withLC(lc, cb);
+  }, delay);
+};
+
+window.setInterval = function(cb, delay) {
+  const lc = activeLC;
+  if (!lc || typeof cb !== 'function') return _sin(cb, delay);
+  const wrapped = function () {
+    if (lc.destroyed || lc.paused) return;   // cleared on pause/destroy, defensive
+    withLC(lc, cb);
+  };
+  const rec = { fn: wrapped, delay, id: _sin(wrapped, delay) };
+  lc.intervals.push(rec);
+  return rec.id;
+};
+
+// Event listeners registered during mount (or while a callback runs) inherit
+// the cell context — so rAFs they spawn later are also pause-aware.
+EventTarget.prototype.addEventListener = function(type, listener, options) {
+  const lc = activeLC;
+  if (lc && typeof listener === 'function') {
+    const wrapped = function (...args) { withLC(lc, () => listener.apply(this, args)); };
+    return _addE.call(this, type, wrapped, options);
+  }
+  return _addE.call(this, type, listener, options);
+};
+
+/* ---- Effect registry ------------------------------------------------- */
+const effects = [
+  {
+    id: 'stream',
+    name: 'Streaming text · particles',
+    prompt:
+`A monospace terminal streaming a long response token-by-token.
+- Black background, off-white text, ~12px line-height 1.5
+- Each newly-typed character emits 1–3 small orange spark particles
+  that drift up + fade over ~600ms with slight gravity
+- Blinking block cursor at the end of the latest line
+- Loop after the buffer fills (clear + restart)
+- No emoji. No icons. Just text + particles.`
+  },
+  {
+    id: 'magnet',
+    name: 'Magnetic dot field',
+    prompt:
+`Field of small white dots on a 24px grid.
+- Dots gently bend toward the cursor with a soft inverse-square pull,
+  capped so they never overlap the pointer
+- Outer dots barely move, inner ones move a lot
+- When pointer leaves, dots ease back to home in ~700ms
+- 60fps canvas, devicePixelRatio aware`
+  },
+  {
+    id: 'ascii',
+    name: 'ASCII rain',
+    prompt:
+`Vertical columns of falling glyphs (Katakana + 0–9 + symbols).
+- Solid black background, neon green text (#4be07a)
+- Brightest character is the leading one, trail fades to dark green
+- Random column speeds, randomized character churn rate per column
+- Pause briefly on hover, resume on leave`
+  },
+  {
+    id: 'trail',
+    name: 'Cursor trail',
+    prompt:
+`Smooth white dot trail that follows the cursor.
+- 30 dots, each lerping toward the next, exponential easing
+- Dot scale + opacity decay along the chain
+- Pure DOM/CSS, no canvas
+- "MOVE CURSOR" hint text centered, fades when interacting`
+  },
+  {
+    id: 'glitch',
+    name: 'RGB glitch text',
+    prompt:
+`Big bold word "SIGNAL" centered.
+- Two duplicate layers, one tinted #ff2d55 offset +2px,
+  one tinted #00d4ff offset -2px
+- Each layer clipped to a horizontal band (top vs. bottom)
+- Step-eased keyframe glitches every 2.4s and 2.7s (out of phase)
+- No blur, only positional jitter`
+  },
+  {
+    id: 'blob',
+    name: 'Goo / liquid blobs',
+    prompt:
+`Three orange-toned blurred circles drift inside the cell, mix-blend
+screen on a dark backdrop. Wrap in an element with high CSS contrast()
+filter to fuse the soft edges into a hard "gooey" silhouette.
+- Mix of warm tones (#ff5b1f, #ff8a4c, #ffb47a)
+- Slow ease-in-out alternate animations, 7–9s each
+- No SVG`
+  },
+  {
+    id: 'terrain',
+    name: 'Wireframe terrain',
+    prompt:
+`Endless scrolling wireframe terrain in canvas 2D.
+- Heightmap from layered sine waves
+- Project a grid (~28×16) into perspective with a fixed camera
+- Stroke each polygon outline with thin white lines, no fill
+- Fog: lines further from camera fade to black
+- Scroll z forward at constant speed`
+  },
+  {
+    id: 'crt',
+    name: 'CRT scanlines',
+    prompt:
+`Phosphor green CRT screen vibe.
+- Vignette via radial-gradient
+- Repeating-linear-gradient horizontal scanlines, slowly rolling
+- Fast subtle flicker overlay (~6Hz)
+- Centered glow text "READY."
+- No JS — pure CSS`
+  },
+  {
+    id: 'marquee',
+    name: 'Stacked marquees',
+    prompt:
+`6 horizontal rows of marquee text stacked vertically, no gaps.
+- Alternate scroll direction by row
+- Vary speed slightly per row (12s / 18s / 22s)
+- Alternating word colors: white, accent orange
+- Words from a portfolio vocab list (PORTFOLIO · WEB · MOTION · CODE · 2026 · STUDIO)
+- Hairline divider between rows`
+  },
+  {
+    id: 'stars',
+    name: 'Constellation',
+    prompt:
+`80 white stars on black, slow drifting.
+- Connect any two stars with a thin line if their distance < 110px
+- Line opacity proportional to (1 − distance/threshold)
+- Pointer attracts nearby stars with a soft spring
+- Wrap stars at edges`
+  },
+  {
+    id: 'orbit',
+    name: 'Orbit rings',
+    prompt:
+`A glowing orange core with 4 concentric thin rings.
+- Each ring rotates a small white planet at a different speed,
+  outer rings rotate slower
+- Pure CSS rotations on the ring elements; planet positioned at ring edge
+- Soft radial gradient background`
+  },
+  {
+    id: 'halftone',
+    name: 'Halftone wave',
+    prompt:
+`White background, grid of black dots.
+- Each dot's radius modulated by a 2D sine wave traveling diagonally
+- Dot size ranges from 0.5px to ~half the cell size
+- 60fps canvas, devicePixelRatio aware
+- Subtle period change every ~6s`
+  },
+  {
+    id: 'type',
+    name: 'Variable type morph',
+    prompt:
+`Cream background, bold display word "FORM" centered.
+- On a 4s loop, animate weight 300 → 900,
+  letter-spacing -0.04em → 0.08em,
+  and font-stretch where supported
+- Hairline rule under the word`
+  },
+  {
+    id: 'pixel',
+    name: 'Pixel sort scan',
+    prompt:
+`A noisy color grid that "sorts" itself.
+- Start with random RGB pixels (low-res, ~64×64 upscaled with crisp-edges)
+- Every frame, pick a random row, sort a contiguous segment
+  by brightness so a horizontal "sort streak" appears
+- After ~6s, scramble back and restart`
+  },
+  {
+    id: 'laser',
+    name: 'Crosshair laser',
+    prompt:
+`Pitch-black cell with a faint center label "AIM".
+- Two thin orange lines (vertical + horizontal) follow the cursor
+  intersecting at the pointer position
+- Soft outer glow on the lines
+- Lines hidden until hover; fade in over 120ms
+- Pure CSS variables updated by a pointermove listener`
+  },
+  {
+    id: 'confetti',
+    name: 'Confetti burst',
+    prompt:
+`Click a centered "CELEBRATE" button → emit ~80 paper rectangles
+from button origin.
+- Mixed colors (orange, white, green, blue, pink)
+- Random initial velocity in upward cone, gravity, drag
+- Each piece rotates on a random axis, fades out at ~1.5s
+- Pieces are absolutely-positioned divs, removed when off-stage`
+  },
+  {
+    id: 'plasma',
+    name: 'Plasma field',
+    prompt:
+`Classic demoscene plasma in canvas 2D.
+- Per-pixel: combine 3 sine sources (linear, radial, animated center)
+- Map result through a duotone palette (deep navy → orange)
+- Render at quarter-res then upscale for performance`
+  },
+  {
+    id: 'bars',
+    name: 'Audio bars',
+    prompt:
+`32 vertical bars across the bottom of the cell.
+- Each bar is a thin gradient (orange → cream) that pulses height
+  with a sine offset by index, plus per-bar phase noise
+- Bars sit on a baseline at 30% from bottom
+- "AUDIO IDLE" small label top-left in mono`
+  },
+  {
+    id: 'noise',
+    name: 'TV static',
+    prompt:
+`Animated grayscale noise filling the cell.
+- Render an ImageData buffer of random luminances every other frame
+- Occasional 1-frame "white-out" flash (3% chance)
+- Slight horizontal jitter offset on the canvas every ~2s`
+  },
+  {
+    id: 'shutter',
+    name: 'Shutter reveal',
+    prompt:
+`Bright orange background with bold word "OPEN".
+- 8 horizontal black panels stacked floor-to-ceiling
+- On a 4s loop, each panel slides off to the right with a
+  staggered 50ms delay revealing the word, then closes back
+- Easing: cubic-bezier(.7,0,.3,1)`
+  },
+  /* extra 80 effects appended at runtime from window.EFFECTS_EXTRA */
+];
+/* Tag everything declared above as 'vfx' */
+effects.forEach(e => { if (!e.category) e.category = 'vfx'; });
+
+if (window.EFFECTS_EXTRA) {
+  for (const e of window.EFFECTS_EXTRA) { if (!e.category) e.category = 'vfx'; }
+  effects.push(...window.EFFECTS_EXTRA);
+}
+if (window.GSAP_MODULES) effects.push(...window.GSAP_MODULES);
+if (window.THREE_MODULES) effects.push(...window.THREE_MODULES);
+
+/* ---- Mounters: each effect's runtime ---------------------------------- */
+const mounters = window.mounters = window.mounters || {};
+
+/* ---- Build cells (called at end after mounters are defined) ---------- */
+const grid = document.getElementById('grid');
+
+// Single shared observer; rebuilt per tab so it only tracks the current grid.
+let activeIO = null;
+
+function buildCellsFiltered(category) {
+  // Tear down previous tab's cells first: kill rAFs/intervals so they don't
+  // keep firing against detached DOM (which would leak forever).
+  if (activeIO) { activeIO.disconnect(); activeIO = null; }
+  for (const old of grid.children) { old.__lc?.destroy(); }
+  grid.innerHTML = '';
+
+  // One observer handles both lazy mount (first intersection) and pause/resume
+  // (subsequent intersection toggles). 50% rootMargin pre-warms one row ahead
+  // so the user doesn't see a frozen first frame when scrolling.
+  const io = new IntersectionObserver((entries) => {
+    for (const ent of entries) {
+      const cell = ent.target;
+      const lc = cell.__lc;
+      if (lc.destroyed) continue;
+      if (ent.isIntersecting) {
+        if (!lc.mounted) {
+          lc.mounted = true;
+          const stage = cell.querySelector('.stage');
+          const fxId = cell.dataset.id;
+          withLC(lc, () => { try { mounters[fxId]?.(stage, cell); }
+                             catch (e) { console.error(fxId, e); } });
+        } else {
+          lc.resume();
+        }
+      } else if (lc.mounted) {
+        lc.pause();
+      }
+    }
+  }, { rootMargin: '50% 0px' });
+  activeIO = io;
+
+  const list = effects.filter(e => (e.category || 'vfx') === category);
+  list.forEach((fx, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.id = fx.id;
+    cell.dataset.cat = fx.category || 'vfx';
+
+    const stage = document.createElement('div');
+    stage.className = 'stage';
+    cell.appendChild(stage);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `
+      <div class="num">${String(i+1).padStart(3,'0')}</div>
+      <div class="name">${fx.name}</div>
+    `;
+    cell.appendChild(meta);
+
+    const corner = document.createElement('div');
+    corner.className = 'corner';
+    corner.textContent = (fx.category || 'vfx').toUpperCase();
+    cell.appendChild(corner);
+
+    const prompt = document.createElement('div');
+    prompt.className = 'prompt';
+    prompt.innerHTML = `
+      <div class="label">PROMPT · ${fx.id.toUpperCase()}</div>
+      <div class="body"></div>
+      <div class="hint">click P to close</div>
+      <button class="copy" type="button">COPY</button>
+    `;
+    prompt.querySelector('.body').textContent = fx.prompt;
+    cell.appendChild(prompt);
+
+    const reveal = document.createElement('button');
+    reveal.className = 'reveal';
+    reveal.type = 'button';
+    reveal.title = 'Reveal prompt';
+    reveal.setAttribute('aria-label', 'Reveal prompt');
+    reveal.textContent = 'P';
+    reveal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cell.classList.toggle('flipped');
+    });
+    cell.appendChild(reveal);
+
+    prompt.addEventListener('click', (e) => {
+      if (e.target.closest('.copy')) {
+        navigator.clipboard?.writeText(fx.prompt);
+        const btn = e.target.closest('.copy');
+        const old = btn.textContent;
+        btn.textContent = 'COPIED';
+        _sto(() => btn.textContent = old, 1100);
+        e.stopPropagation();
+      }
+    });
+
+    cell.__lc = makeLifecycle(cell);
+    grid.appendChild(cell);
+    io.observe(cell);
+  });
+
+  document.getElementById('indexLabel').textContent =
+    category.toUpperCase() + ' · 01–' + String(list.length).padStart(2,'0');
+  document.getElementById('footMeta').textContent =
+    list.length + ' · ' + category.toUpperCase() + ' · P TO REVEAL PROMPT';
+}
+
+/* 01 streaming text */
+mounters.stream = (root) => {
+  root.classList.add('fx-stream');
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  const txt = document.createElement('div');
+  txt.className = 'line';
+  root.appendChild(txt);
+  root.appendChild(cursor);
+
+  const corpus =
+`> generate vfx-cell prompt
+streaming response — token by token,
+particles emit on each character.
+draft 03 · accept whitespace · respect newlines.
+the cursor blinks while idle.
+
+> next: pulse the cell border
+warming up the buffer ... ok.
+ready.
+
+`;
+  let i = 0;
+  function tick() {
+    if (i >= corpus.length) {
+      txt.textContent = '';
+      i = 0;
+    } else {
+      const ch = corpus[i++];
+      txt.textContent += ch;
+      // emit a spark at cursor
+      const r = root.getBoundingClientRect();
+      const cr = cursor.getBoundingClientRect();
+      const x = cr.left - r.left + 2;
+      const y = cr.top - r.top + 6;
+      for (let k = 0; k < 2; k++) spark(root, x, y);
+    }
+    setTimeout(tick, 28 + Math.random()*60);
+  }
+  tick();
+
+  function spark(parent, x, y) {
+    const s = document.createElement('span');
+    s.className = 'spark';
+    s.style.left = x + 'px';
+    s.style.top = y + 'px';
+    parent.appendChild(s);
+    const dx = (Math.random()-0.5)*30;
+    const dy = - (10 + Math.random()*30);
+    const t0 = performance.now();
+    const dur = 600 + Math.random()*400;
+    function f(now) {
+      const t = (now - t0) / dur;
+      if (t >= 1) { s.remove(); return; }
+      s.style.transform = `translate(${dx*t}px, ${dy*t + (t*t)*20}px)`;
+      s.style.opacity = (1 - t).toFixed(2);
+      requestAnimationFrame(f);
+    }
+    requestAnimationFrame(f);
+  }
+};
+
+/* 02 magnet field */
+mounters.magnet = (root) => {
+  root.classList.add('fx-magnet');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  let w, h, dpr, dots = [];
+  let mx = -9999, my = -9999;
+  function resize() {
+    dpr = devicePixelRatio || 1;
+    w = root.clientWidth; h = root.clientHeight;
+    c.width = w*dpr; c.height = h*dpr; c.style.width = w+'px'; c.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    dots = [];
+    const step = 22;
+    for (let y = step/2; y < h; y += step) {
+      for (let x = step/2; x < w; x += step) {
+        dots.push({hx:x, hy:y, x, y});
+      }
+    }
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+
+  root.addEventListener('pointermove', e => {
+    const r = root.getBoundingClientRect();
+    mx = e.clientX - r.left; my = e.clientY - r.top;
+  });
+  root.addEventListener('pointerleave', () => { mx = -9999; my = -9999; });
+
+  function frame() {
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = '#bdbdbd';
+    for (const d of dots) {
+      const dx = d.hx - mx, dy = d.hy - my;
+      const dist2 = dx*dx + dy*dy;
+      const f = Math.min(40, 1500 / (dist2+50));
+      const ang = Math.atan2(dy, dx);
+      const tx = d.hx + Math.cos(ang) * f * 0.6;
+      const ty = d.hy + Math.sin(ang) * f * 0.6;
+      d.x += (tx - d.x) * 0.12;
+      d.y += (ty - d.y) * 0.12;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 1.4, 0, Math.PI*2);
+      ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 03 ASCII rain */
+mounters.ascii = (root) => {
+  root.classList.add('fx-ascii');
+  const chars = "ｦｱｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆ0123456789#*+";
+  function build() {
+    root.innerHTML = '';
+    const w = root.clientWidth;
+    const cols = Math.ceil(w / 14);
+    for (let i = 0; i < cols; i++) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      col.style.left = (i*14) + 'px';
+      const len = 8 + Math.floor(Math.random()*18);
+      let s = '';
+      for (let j = 0; j < len; j++) s += chars[Math.floor(Math.random()*chars.length)] + '\n';
+      col.textContent = s;
+      const dur = 4 + Math.random()*5;
+      col.animate(
+        [{ transform: 'translateY(-50%)' }, { transform: 'translateY(120%)' }],
+        { duration: dur*1000, iterations: Infinity, delay: -Math.random()*dur*1000 }
+      );
+      // brightness gradient via CSS background-clip on text
+      col.style.background = 'linear-gradient(to bottom, #fff 0%, #4be07a 18%, #094 80%, #021 100%)';
+      col.style.webkitBackgroundClip = 'text';
+      col.style.backgroundClip = 'text';
+      col.style.color = 'transparent';
+      root.appendChild(col);
+    }
+  }
+  build();
+  new ResizeObserver(() => build()).observe(root);
+};
+
+/* 04 cursor trail */
+mounters.trail = (root) => {
+  root.classList.add('fx-trail');
+  const lab = document.createElement('div');
+  lab.className = 'label-c'; lab.textContent = 'MOVE CURSOR';
+  root.appendChild(lab);
+
+  const N = 22;
+  const dots = [];
+  for (let i = 0; i < N; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    d.style.opacity = (1 - i/N).toFixed(2);
+    d.style.transform = `translate(-50%,-50%) scale(${(1 - i/N).toFixed(2)})`;
+    root.appendChild(d);
+    dots.push({el: d, x: 0, y: 0});
+  }
+
+  let mx = 0, my = 0, active = false;
+  root.addEventListener('pointermove', e => {
+    const r = root.getBoundingClientRect();
+    mx = e.clientX - r.left; my = e.clientY - r.top;
+    active = true;
+    lab.style.opacity = 0;
+  });
+  root.addEventListener('pointerleave', () => { active = false; lab.style.opacity = 1; });
+
+  function frame() {
+    if (active) {
+      let px = mx, py = my;
+      for (const d of dots) {
+        d.x += (px - d.x) * 0.35;
+        d.y += (py - d.y) * 0.35;
+        d.el.style.left = d.x + 'px';
+        d.el.style.top = d.y + 'px';
+        px = d.x; py = d.y;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 05 glitch text */
+mounters.glitch = (root) => {
+  root.classList.add('fx-glitch');
+  const w = document.createElement('div');
+  w.className = 'word';
+  w.dataset.text = 'SIGNAL';
+  w.textContent = 'SIGNAL';
+  root.appendChild(w);
+};
+
+/* 06 blob */
+mounters.blob = (root) => {
+  root.classList.add('fx-blob');
+  const inner = document.createElement('div');
+  inner.className = 'inner';
+  inner.innerHTML = `<div class="b b1"></div><div class="b b2"></div><div class="b b3"></div>`;
+  root.appendChild(inner);
+};
+
+/* 07 wireframe terrain */
+mounters.terrain = (root) => {
+  root.classList.add('fx-terrain');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  let w, h, dpr;
+  function resize() {
+    dpr = devicePixelRatio || 1;
+    w = root.clientWidth; h = root.clientHeight;
+    c.width = w*dpr; c.height = h*dpr; c.style.width = w+'px'; c.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+
+  const COLS = 28, ROWS = 18;
+  let z0 = 0;
+
+  function height(x, z) {
+    return (
+      Math.sin(x*0.45 + z*0.3) * 0.6 +
+      Math.sin(x*0.18 - z*0.6) * 0.9 +
+      Math.cos(x*0.7 + z*0.1) * 0.3
+    );
+  }
+
+  function frame() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
+    z0 += 0.04;
+    ctx.lineWidth = 1;
+    for (let r = ROWS-1; r >= 0; r--) {
+      for (let cIdx = 0; cIdx < COLS; cIdx++) {
+        const x = cIdx - COLS/2;
+        const z = r + (z0 % 1);
+        const y = height(x, z);
+        const persp = 1 / (z * 0.18 + 0.4);
+        const sx = w/2 + x * 22 * persp;
+        const sy = h*0.65 + (-y * 18 * persp) - z * 4;
+        const x2 = (cIdx+1) - COLS/2;
+        const y2 = height(x2, z);
+        const sx2 = w/2 + x2 * 22 * persp;
+        const sy2 = h*0.65 + (-y2 * 18 * persp) - z * 4;
+
+        const fog = Math.max(0, 1 - z/ROWS);
+        ctx.strokeStyle = `rgba(255,255,255,${fog*0.7})`;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx2, sy2);
+        ctx.stroke();
+
+        if (r < ROWS-1) {
+          const z3 = (r+1) + (z0 % 1);
+          const persp2 = 1 / (z3 * 0.18 + 0.4);
+          const y3 = height(x, z3);
+          const sx3 = w/2 + x * 22 * persp2;
+          const sy3 = h*0.65 + (-y3 * 18 * persp2) - z3*4;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx3, sy3);
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 08 CRT */
+mounters.crt = (root) => {
+  root.classList.add('fx-crt');
+  const t = document.createElement('div');
+  t.className = 'text';
+  t.textContent = 'READY.';
+  root.appendChild(t);
+};
+
+/* 09 marquee */
+mounters.marquee = (root) => {
+  root.classList.add('fx-marquee');
+  const words = ['PORTFOLIO','WEB','MOTION','CODE','2026','STUDIO','PIXELS','LAB'];
+  for (let i = 0; i < 6; i++) {
+    const row = document.createElement('div');
+    row.className = 'row' + (i%2?' r-rev':'') + (i===2?' r-fast':'');
+    const track = document.createElement('div');
+    track.className = 'track';
+    let html = '';
+    const order = [...words].sort(() => Math.random()-0.5);
+    for (let dup = 0; dup < 2; dup++) {
+      for (const wd of order) html += `<span>${wd} —</span>`;
+    }
+    track.innerHTML = html;
+    row.appendChild(track);
+    root.appendChild(row);
+  }
+};
+
+/* 10 stars */
+mounters.stars = (root) => {
+  root.classList.add('fx-stars');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  let w, h, dpr, stars = [];
+  let mx = -9999, my = -9999;
+  function resize() {
+    dpr = devicePixelRatio || 1;
+    w = root.clientWidth; h = root.clientHeight;
+    c.width = w*dpr; c.height = h*dpr; c.style.width = w+'px'; c.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    stars = [];
+    const N = Math.min(80, Math.floor(w*h/3500));
+    for (let i = 0; i < N; i++) {
+      stars.push({
+        x: Math.random()*w, y: Math.random()*h,
+        vx: (Math.random()-0.5)*0.2, vy: (Math.random()-0.5)*0.2
+      });
+    }
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+
+  root.addEventListener('pointermove', e => {
+    const r = root.getBoundingClientRect();
+    mx = e.clientX-r.left; my = e.clientY-r.top;
+  });
+  root.addEventListener('pointerleave', () => { mx = -9999; my = -9999; });
+
+  function frame() {
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.fillRect(0,0,w,h);
+    for (const s of stars) {
+      const dx = mx - s.x, dy = my - s.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < 14000) {
+        s.vx += dx/d2 * 5;
+        s.vy += dy/d2 * 5;
+      }
+      s.vx *= 0.96; s.vy *= 0.96;
+      s.x += s.vx; s.y += s.vy;
+      if (s.x < 0) s.x += w; if (s.x > w) s.x -= w;
+      if (s.y < 0) s.y += h; if (s.y > h) s.y -= h;
+    }
+    ctx.lineWidth = 1;
+    for (let i = 0; i < stars.length; i++) {
+      for (let j = i+1; j < stars.length; j++) {
+        const a = stars[i], b = stars[j];
+        const dx = a.x-b.x, dy = a.y-b.y;
+        const d = Math.hypot(dx,dy);
+        if (d < 110) {
+          ctx.strokeStyle = `rgba(255,255,255,${(1-d/110)*0.5})`;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        }
+      }
+    }
+    ctx.fillStyle = '#fff';
+    for (const s of stars) {
+      ctx.beginPath(); ctx.arc(s.x,s.y,1.4,0,Math.PI*2); ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 11 orbit */
+mounters.orbit = (root) => {
+  root.classList.add('fx-orbit');
+  const sizes = [40, 60, 80, 100];
+  sizes.forEach((s, i) => {
+    const ring = document.createElement('div');
+    ring.className = 'ring';
+    ring.style.width = s + '%';
+    ring.style.height = s + '%';
+    const planet = document.createElement('div');
+    planet.className = 'planet';
+    planet.style.left = '100%';
+    planet.style.top = '50%';
+    planet.style.transform = 'translate(-50%,-50%)';
+    ring.appendChild(planet);
+    ring.style.animation = `spin ${8 + i*4}s linear ${i%2?'reverse':''} infinite`;
+    root.appendChild(ring);
+  });
+  const core = document.createElement('div');
+  core.className = 'core';
+  root.appendChild(core);
+};
+
+/* 12 halftone */
+mounters.halftone = (root) => {
+  root.classList.add('fx-halftone');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  let w, h, dpr;
+  function resize() {
+    dpr = devicePixelRatio || 1;
+    w = root.clientWidth; h = root.clientHeight;
+    c.width = w*dpr; c.height = h*dpr; c.style.width = w+'px'; c.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+
+  let t = 0;
+  function frame() {
+    t += 0.02;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#0a0a0a';
+    const step = 16;
+    for (let y = step/2; y < h; y += step) {
+      for (let x = step/2; x < w; x += step) {
+        const v = (Math.sin(x*0.05 + t) + Math.cos(y*0.06 - t*0.8))*0.5 + 0.5;
+        const r = Math.max(0, v * step*0.55);
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 13 type morph */
+mounters.type = (root) => {
+  root.classList.add('fx-type');
+  const w = document.createElement('div');
+  w.className = 'word';
+  w.textContent = 'FORM';
+  root.appendChild(w);
+  let t = 0;
+  setInterval(() => {
+    t = 1 - t;
+    w.style.fontWeight = t ? '900' : '300';
+    w.style.letterSpacing = t ? '0.08em' : '-0.04em';
+    w.style.fontStretch = t ? '125%' : '75%';
+  }, 1800);
+};
+
+/* 14 pixel sort */
+mounters.pixel = (root) => {
+  root.classList.add('fx-pixel');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  c.style.imageRendering = 'pixelated';
+  const W = 64, H = 64;
+  c.width = W; c.height = H;
+  function fill() {
+    const img = ctx.createImageData(W, H);
+    for (let i = 0; i < W*H; i++) {
+      img.data[i*4]   = Math.random()*255;
+      img.data[i*4+1] = Math.random()*255;
+      img.data[i*4+2] = Math.random()*255;
+      img.data[i*4+3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  fill();
+  function frame() {
+    const img = ctx.getImageData(0,0,W,H);
+    const d = img.data;
+    const row = Math.floor(Math.random()*H);
+    const x0 = Math.floor(Math.random()*W*0.5);
+    const x1 = x0 + Math.floor(Math.random()*(W - x0));
+    const seg = [];
+    for (let x = x0; x < x1; x++) {
+      const i = (row*W + x)*4;
+      seg.push([d[i],d[i+1],d[i+2]]);
+    }
+    seg.sort((a,b) => (a[0]+a[1]+a[2]) - (b[0]+b[1]+b[2]));
+    for (let x = x0; x < x1; x++) {
+      const i = (row*W + x)*4;
+      const s = seg[x-x0];
+      d[i] = s[0]; d[i+1] = s[1]; d[i+2] = s[2];
+    }
+    ctx.putImageData(img, 0, 0);
+    requestAnimationFrame(frame);
+  }
+  frame();
+  setInterval(fill, 6000);
+};
+
+/* 15 laser */
+mounters.laser = (root) => {
+  root.classList.add('fx-laser');
+  const t = document.createElement('div'); t.className = 'target'; t.textContent = 'AIM';
+  const bh = document.createElement('div'); bh.className = 'beam-h';
+  const bv = document.createElement('div'); bv.className = 'beam-v';
+  root.appendChild(t); root.appendChild(bh); root.appendChild(bv);
+  root.addEventListener('pointermove', e => {
+    const r = root.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    bh.style.top = y + 'px';
+    bv.style.left = x + 'px';
+  });
+};
+
+/* 16 confetti */
+mounters.confetti = (root) => {
+  root.classList.add('fx-confetti');
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.textContent = 'CELEBRATE';
+  root.appendChild(btn);
+  const colors = ['#ff5b1f','#ffffff','#4be07a','#00d4ff','#ff5577','#ffd166'];
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const r = btn.getBoundingClientRect();
+    const rr = root.getBoundingClientRect();
+    const ox = r.left + r.width/2 - rr.left;
+    const oy = r.top + r.height/2 - rr.top;
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('div');
+      p.className = 'piece';
+      p.style.background = colors[Math.floor(Math.random()*colors.length)];
+      p.style.left = ox + 'px';
+      p.style.top = oy + 'px';
+      root.appendChild(p);
+      const ang = -Math.PI/2 + (Math.random()-0.5)*Math.PI*0.8;
+      const sp = 4 + Math.random()*6;
+      let vx = Math.cos(ang)*sp, vy = Math.sin(ang)*sp;
+      let x = ox, y = oy;
+      let rot = Math.random()*360, vr = (Math.random()-0.5)*20;
+      const t0 = performance.now();
+      function f(now) {
+        const t = (now - t0)/1500;
+        if (t >= 1) { p.remove(); return; }
+        vy += 0.18; vx *= 0.99;
+        x += vx; y += vy; rot += vr;
+        p.style.transform = `translate(${x-ox}px,${y-oy}px) rotate(${rot}deg)`;
+        p.style.opacity = (1 - t).toFixed(2);
+        requestAnimationFrame(f);
+      }
+      requestAnimationFrame(f);
+    }
+  });
+};
+
+/* 17 plasma */
+mounters.plasma = (root) => {
+  root.classList.add('fx-plasma');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  const SCALE = 4;
+  let w, h, iw, ih, img;
+  function resize() {
+    w = root.clientWidth; h = root.clientHeight;
+    iw = Math.max(1, Math.floor(w/SCALE));
+    ih = Math.max(1, Math.floor(h/SCALE));
+    c.width = iw; c.height = ih;
+    c.style.width = w+'px'; c.style.height = h+'px';
+    c.style.imageRendering = 'auto';
+    img = ctx.createImageData(iw, ih);
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+
+  let t = 0;
+  function frame() {
+    t += 0.03;
+    const d = img.data;
+    for (let y = 0; y < ih; y++) {
+      for (let x = 0; x < iw; x++) {
+        const v =
+          Math.sin(x*0.12 + t) +
+          Math.sin((x*0.08 + y*0.10 + t)*1.0) +
+          Math.sin(Math.hypot(x-iw/2, y-ih/2)*0.12 + t);
+        const n = (v + 3)/6; // 0..1
+        // duotone navy → orange
+        const r = Math.floor(20 + n*235);
+        const g = Math.floor(20 + n*100);
+        const b = Math.floor(60 - n*40);
+        const i = (y*iw + x)*4;
+        d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 18 audio bars */
+mounters.bars = (root) => {
+  root.classList.add('fx-bars');
+  for (let i = 0; i < 32; i++) {
+    const b = document.createElement('div');
+    b.className = 'b';
+    b.style.animationDelay = ((i*73) % 1200) / 1000 + 's';
+    b.style.animationDuration = (0.9 + Math.random()*0.6) + 's';
+    root.appendChild(b);
+  }
+  const lab = document.createElement('div');
+  lab.className = 'label-c'; lab.textContent = 'AUDIO IDLE';
+  root.appendChild(lab);
+};
+
+/* 19 noise */
+mounters.noise = (root) => {
+  root.classList.add('fx-noise');
+  const c = document.createElement('canvas');
+  root.appendChild(c);
+  const ctx = c.getContext('2d');
+  const W = 160, H = 90;
+  c.width = W; c.height = H;
+  c.style.imageRendering = 'pixelated';
+  function resize() {
+    c.style.width = root.clientWidth + 'px';
+    c.style.height = root.clientHeight + 'px';
+  }
+  resize();
+  new ResizeObserver(resize).observe(root);
+  const img = ctx.createImageData(W, H);
+  let i = 0;
+  let off = 0;
+  function frame() {
+    i++;
+    if (i % 2 === 0) {
+      const d = img.data;
+      const flash = Math.random() < 0.03;
+      for (let p = 0; p < W*H; p++) {
+        const v = flash ? 255 : (Math.random()*255)|0;
+        d[p*4]=v; d[p*4+1]=v; d[p*4+2]=v; d[p*4+3]=255;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+    if (i % 120 === 0) {
+      off = (Math.random()-0.5)*6;
+      c.style.transform = `translateX(${off}px)`;
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+/* 20 shutter */
+mounters.shutter = (root) => {
+  root.classList.add('fx-shutter');
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'panel';
+    root.appendChild(p);
+  }
+  const w = document.createElement('div');
+  w.textContent = 'OPEN';
+  w.style.position = 'relative';
+  w.style.zIndex = 0;
+  root.appendChild(w);
+};
+
+/* Merge any extras that registered before this script ran */
+if (window.__pendingMounters) Object.assign(mounters, window.__pendingMounters);
+
+/* ---- Tabs / category filtering ---- */
+const CATEGORIES = [
+  { id: 'vfx',     label: 'VFX' },
+  { id: 'gsap',    label: 'GSAP' },
+];
+if (window.THREE_MODULES && window.THREE_MODULES.length)
+  CATEGORIES.push({ id: '3d', label: '3D' });
+let activeCat = 'vfx';
+
+const tabsEl = document.getElementById('tabs');
+function renderTabs() {
+  tabsEl.innerHTML = '';
+  for (const c of CATEGORIES) {
+    const n = effects.filter(e => (e.category || 'vfx') === c.id).length;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.cat = c.id;
+    b.className = c.id === activeCat ? 'active' : '';
+    b.innerHTML = `${c.label} <span class="count">${String(n).padStart(2,'0')}</span>`;
+    b.addEventListener('click', () => {
+      if (activeCat === c.id) return;
+      activeCat = c.id;
+      renderTabs();
+      buildCellsFiltered(activeCat);
+    });
+    tabsEl.appendChild(b);
+  }
+}
+
+renderTabs();
+buildCellsFiltered(activeCat);
+
+</script>
+</body>
+</html>
